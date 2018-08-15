@@ -1,4 +1,4 @@
-/*
+﻿/*
 	Conrad 'Condzi' Kubacki 2018
 	https://github.com/condzi
 */
@@ -6,7 +6,10 @@
 #include "App.hpp"
 
 #include <thread>
-#include <atomic>
+#include <fstream>
+#include <iterator>
+#include <locale>
+#include <codecvt>
 // Debug
 #include <iostream>
 
@@ -16,7 +19,7 @@ App::App()
 	window.create( { 1280,720 }, "Texture Viewer", sf::Style::Close );
 	view = window.getDefaultView();
 
-	loadTextureAsync( "data/IMG1.jpg" );
+	loadTextureAsync( u8"data/ąćź.jpg" );
 	executionLoop();
 }
 
@@ -32,7 +35,6 @@ void App::executionLoop()
 void App::readInput()
 {
 	sf::Event ev;
-
 	float accumZoom = 1.f;
 
 	while ( window.pollEvent( ev ) ) {
@@ -109,9 +111,30 @@ void App::loadTextureAsync( const std::string& path )
 {
 	// Note: capture parameters as copies because they'll be destroyed after leaving this func, since thread will be detached.
 	std::thread{ [=] {
-	auto succes = texture.loadFromFile( path );
-	if ( succes )
-		sprite.setTexture( texture );
-	// else report error
+		auto converted = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>{}.from_bytes( path );
+
+		std::ifstream file( converted, std::ifstream::binary );
+		if ( !file ) {
+			std::cout << "Cannot open file \"" << path << "\".\n";
+			return;
+		}
+
+		using It = std::istreambuf_iterator<char>;
+		// Strange way of getting file size.
+		file.seekg( 0, std::ios::end );
+		size_t fileSize = file.tellg();
+		file.seekg( 0, std::ios::beg );
+
+
+		std::vector<char> content;
+		content.reserve( fileSize );
+		std::move( It( file ), It(), std::back_inserter( content ) );
+
+		if ( texture.loadFromMemory( content.data(), fileSize ))
+			sprite.setTexture( texture );
+		else
+			std::cout << "Cannot load texture from memory (\"" << path << "\".\n";
+
+		std::cout << "loaded";
 	} }.detach();
 }
