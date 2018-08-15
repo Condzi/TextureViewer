@@ -19,7 +19,11 @@ App::App()
 	window.create( { 1280,720 }, "Texture Viewer", sf::Style::Close );
 	view = window.getDefaultView();
 
-	loadTextureAsync( u8"data/ąćź.jpg" );
+	font.loadFromFile( "data/consolas.ttf" );
+	inputBox.text.setFont( font );
+	inputBox.text.setCharacterSize( 50 );
+	inputBox.text.setString( "test" );
+
 	executionLoop();
 }
 
@@ -90,32 +94,36 @@ void App::readInput()
 			break;
 		}
 		}
-		// Pass ev argument to input box here.
+
+		inputBox.processEvent( ev );
 	}
 }
 
 void App::update()
 {
-	// update input box.
+	inputBox.update();
+
+	if ( inputBox.confim && !loadingInProgress ) {
+		loadTextureAsync( inputBox.text.getString().toWideString() );
+		loadingInProgress = true;
+	}
 }
 
 void App::render()
 {
 	window.clear();
 	window.draw( sprite );
-	// Draw input box here
+	window.draw( inputBox );
 	window.display();
 }
 
-void App::loadTextureAsync( const std::string& path )
+void App::loadTextureAsync( const std::wstring& path )
 {
 	// Note: capture parameters as copies because they'll be destroyed after leaving this func, since thread will be detached.
-	std::thread{ [=] {
-		auto converted = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>{}.from_bytes( path );
-
-		std::ifstream file( converted, std::ifstream::binary );
+	std::thread{ [path, this] {
+		std::ifstream file( path, std::ifstream::binary );
 		if ( !file ) {
-			std::cout << "Cannot open file \"" << path << "\".\n";
+			std::wcout << "Cannot open file \"" << path << "\".\n";
 			return;
 		}
 
@@ -125,16 +133,15 @@ void App::loadTextureAsync( const std::string& path )
 		size_t fileSize = file.tellg();
 		file.seekg( 0, std::ios::beg );
 
-
 		std::vector<char> content;
 		content.reserve( fileSize );
 		std::move( It( file ), It(), std::back_inserter( content ) );
 
-		if ( texture.loadFromMemory( content.data(), fileSize ))
+		if ( texture.loadFromMemory( content.data(), fileSize ) )
 			sprite.setTexture( texture );
 		else
-			std::cout << "Cannot load texture from memory (\"" << path << "\".\n";
+			std::wcout << "Cannot load texture from memory (\"" << path << "\".\n";
 
-		std::cout << "loaded";
+		loadingInProgress = false;
 	} }.detach();
 }
