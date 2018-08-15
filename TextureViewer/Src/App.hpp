@@ -20,6 +20,11 @@ private:
 	sf::Texture texture;
 	sf::Sprite sprite;
 
+	void executionLoop();
+	void readInput();
+	void update();
+	void render();
+
 	// Loads texture from path, while executing lambda in a loop. `l` is called until texture is loaded.
 	bool loadTextureAsync( const std::string& path, std::function<void()> l );
 };
