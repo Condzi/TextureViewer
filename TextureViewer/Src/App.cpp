@@ -7,27 +7,16 @@
 
 #include <thread>
 #include <atomic>
+// Debug
+#include <iostream>
 
 App::App()
 {
 	// TODO: Make window resizable.
-	window.create( { 800,600 }, "Texture Viewer", sf::Style::Close );
+	window.create( { 1280,720 }, "Texture Viewer", sf::Style::Close );
+	view = window.getDefaultView();
 
-	auto succes = loadTextureAsync( "data/IMG1.jpg", [&] {
-		sf::Event ev;
-		while ( window.pollEvent( ev ) ) {
-			if ( ev.type == sf::Event::Closed )
-				window.close();
-		}
-
-		// Render some loading message, for now just change window color.
-		window.clear( sf::Color::Red );
-		window.display();
-	} );
-
-	if ( succes )
-		sprite.setTexture( texture );
-
+	loadTextureAsync( "data/IMG1.jpg" );
 	executionLoop();
 }
 
@@ -43,12 +32,62 @@ void App::executionLoop()
 void App::readInput()
 {
 	sf::Event ev;
-	while ( window.pollEvent( ev ) ) {
-		if ( ev.type == sf::Event::Closed )
-			window.close();
 
-		// TODO: Space + LMB + Move = moving around
-		// Scale view when resize. 
+	float accumZoom = 1.f;
+
+	while ( window.pollEvent( ev ) ) {
+		switch ( ev.type ) {
+		case sf::Event::Closed:
+		{
+			window.close();
+			break;
+		}
+		case sf::Event::MouseWheelScrolled:
+		{
+			if ( moving ) break;
+
+			if ( ev.mouseWheelScroll.delta <= -1 )
+				currentZoom = std::min( ZOOM_MAX, currentZoom + .1f );
+			else if ( ev.mouseWheelScroll.delta >= 1 )
+				currentZoom = std::max( ZOOM_MIN, currentZoom - .1f );
+
+			accumZoom *= currentZoom;
+
+			view.setSize( window.getDefaultView().getSize() );
+			view.zoom( currentZoom );
+			window.setView( view );
+			break;
+		}
+		case sf::Event::MouseButtonPressed:
+		{
+			if ( ev.mouseButton.button == sf::Mouse::Left ) {
+				moving = true;
+				oldPos = sf::Vector2f( sf::Mouse::getPosition( window ) );
+			}
+			break;
+		}
+		case sf::Event::MouseButtonReleased:
+		{
+			if ( ev.mouseButton.button == sf::Mouse::Left )
+				moving = false;
+			break;
+		}
+		case sf::Event::MouseMoved:
+		{
+			if ( !moving ) break;
+
+			const sf::Vector2f newPos( ev.mouseMove.x, ev.mouseMove.y );
+			auto deltaPos = oldPos - newPos;
+
+			deltaPos *= accumZoom;
+
+			view.move( deltaPos );
+			window.setView( view );
+
+			oldPos = newPos;
+			break;
+		}
+		}
 		// Pass ev argument to input box here.
 	}
 }
@@ -66,29 +105,13 @@ void App::render()
 	window.display();
 }
 
-bool App::loadTextureAsync( const std::string& path, std::function<void()> l )
+void App::loadTextureAsync( const std::string& path )
 {
-	// @Cleanup: this could be better, this window.setActive is ugly
-	std::thread thread;
-	std::atomic_bool endThread = false;
-
-	// Setting window context lock.
-	window.setActive( false );
-
-	thread = std::thread( [&] {
-		window.setActive( true );
-
-		while ( !endThread )
-			l();
-
-		window.setActive( false );
-	} );
-
+	// Note: capture parameters as copies because they'll be destroyed after leaving this func, since thread will be detached.
+	std::thread{ [=] {
 	auto succes = texture.loadFromFile( path );
-	endThread = true;
-	thread.join();
-
-	window.setActive( true );
-
-	return succes;
+	if ( succes )
+		sprite.setTexture( texture );
+	// else report error
+	} }.detach();
 }
