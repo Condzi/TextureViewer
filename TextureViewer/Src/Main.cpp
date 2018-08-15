@@ -3,5 +3,9 @@
 	https://github.com/condzi
 */
 
+#include "App.hpp"
+
 int main()
-{}
+{
+	App{};
+}
